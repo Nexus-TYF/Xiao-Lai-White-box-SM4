@@ -27,3 +27,4 @@ void sm4_wb_gen_secrect_sbox(sm4_context *sm4_key);
 void sm4_wb_gen_affine(Sm4Whitebox* sm4_wb_ctx);
 void sm4_wb_combine_tables(Sm4Whitebox* sm4_wb_ctx);
 void sm4_wb_gen_tables(uint8_t *key, Sm4Whitebox *sm4_wb_ctx);
+void sm4_wb_enc(unsigned char IN[], unsigned char OUT[], Sm4Whitebox *sm4_wb_ctx);

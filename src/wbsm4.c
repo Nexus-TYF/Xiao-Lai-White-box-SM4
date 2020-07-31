@@ -1,6 +1,18 @@
 #include "wbsm4.h"
 #include "sbox.h"
 
+#define GET32(pc)  (\
+((uint32_t)(pc)[0] << 24) ^\
+((uint32_t)(pc)[1] << 16) ^\
+((uint32_t)(pc)[2] <<  8) ^\
+((uint32_t)(pc)[3]))
+
+#define PUT32(st, ct)\
+(ct)[0] = (uint8_t)((st) >> 24);\
+(ct)[1] = (uint8_t)((st) >> 16);\
+(ct)[2] = (uint8_t)((st) >>  8);\
+(ct)[3] = (uint8_t)(st)
+
 uint32_t identM32[32]={0x80000000,0x40000000,0x20000000,0x10000000,0x8000000,0x4000000,0x2000000,0x1000000,0x800000,0x400000,0x200000,0x100000,0x80000,0x40000,0x20000,0x10000,0x8000,0x4000,0x2000,0x1000,0x800,0x400,0x200,0x100,0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1};
 
 M32 sm4_csl_xor_matrix = {
@@ -149,4 +161,50 @@ void sm4_wb_gen_tables(uint8_t *key, Sm4Whitebox *sm4_wb_ctx)
     sm4_wb_gen_secrect_sbox(&ctx);
     sm4_wb_gen_affine(sm4_wb_ctx);
     sm4_wb_combine_tables(sm4_wb_ctx);
+}
+void sm4_wb_enc(unsigned char IN[], unsigned char OUT[], Sm4Whitebox *sm4_wb_ctx)
+{
+    uint32_t x0,x1,x2,x3,x4;
+    uint32_t xt0, xt1, xt2, xt3, xt4;
+    
+    x0 = GET32(IN     );
+	x1 = GET32(IN +  4);
+	x2 = GET32(IN +  8);
+    x3 = GET32(IN + 12);
+
+    x0 = affineU32(sm4_wb_ctx->SE[0], x0);
+    x1 = affineU32(sm4_wb_ctx->SE[1], x1);
+    x2 = affineU32(sm4_wb_ctx->SE[2], x2);
+    x3 = affineU32(sm4_wb_ctx->SE[3], x3);
+
+    for(int i = 0; i < 32; i++)
+    {
+        xt1 = affineU32(sm4_wb_ctx->M[i][0], x1);
+        xt2 = affineU32(sm4_wb_ctx->M[i][1], x2);
+        xt3 = affineU32(sm4_wb_ctx->M[i][2], x3);
+        x4 = xt1 ^ xt2 ^ xt3;
+        x4 = sm4_wb_ctx->Table[i][0][(x4 >> 24) & 0xff] ^ sm4_wb_ctx->Table[i][1][(x4 >> 16) & 0xff] ^ sm4_wb_ctx->Table[i][2][(x4 >> 8) & 0xff] ^ sm4_wb_ctx->Table[i][3][x4 & 0xff];
+        xt0 = affineU32(sm4_wb_ctx->C[i], x0);
+        xt4 = affineU32(sm4_wb_ctx->D[i], x4);
+        x4 = xt0 ^ xt4;
+        
+        x0=x1;
+        x1=x2;
+        x2=x3;
+        x3=x4;
+    }
+    x4 = x2;
+    x2 = x0;
+    x0 = x3;
+    x3 = x1;
+
+    x0 = affineU32(sm4_wb_ctx->FE[3], x0);
+    x4 = affineU32(sm4_wb_ctx->FE[2], x4);
+    x3 = affineU32(sm4_wb_ctx->FE[1], x3);
+    x2 = affineU32(sm4_wb_ctx->FE[0], x2);
+
+    PUT32(x0, OUT     );
+	PUT32(x4, OUT +  4);
+	PUT32(x3, OUT +  8);
+	PUT32(x2, OUT + 12);
 }
