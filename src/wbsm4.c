@@ -64,8 +64,7 @@ void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
     Aff32 P[SM4_ROUNDS + 4][2];
     Aff8 E[SM4_ROUNDS + 4][4][2];
     Aff32 EC[SM4_ROUNDS + 4][2];
-    Aff32 Q[SM4_ROUNDS + 4][2];
-
+    Aff32 Q[SM4_ROUNDS][2];
     uint8_t skbox_enc[SM4_ROUNDS][4][256];
 
     int i, j;
@@ -96,7 +95,6 @@ void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
 
         // combine 4 E8 to 1 E32
         affinecomM8to32(E[i][0][1], E[i][1][1], E[i][2][1], E[i][3][1], &EC[i][1]);
-        genaffinepairM32(&Q[i][0], &Q[i][1]);
     }
 
     for (i = 0; i < 32; i++)
@@ -106,6 +104,9 @@ void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
         affinemixM32(EC[i][1], P[i + 2][1], &wbsm4_ctx->M[i][1]);
         affinemixM32(EC[i][1], P[i + 3][1], &wbsm4_ctx->M[i][2]);
 
+        //affine Q
+        genaffinepairM32(&Q[i][0], &Q[i][1]);
+        
         //combine QL
         M32 QL;
         MatMulMatM32(Q[i][0].Mat, sm4_csl_xor_matrix, &QL);
@@ -158,9 +159,9 @@ void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
     uint32_t x0,x1,x2,x3,x4;
     uint32_t xt0, xt1, xt2, xt3, xt4;
     
-    x0 = GET32(IN     );
-	x1 = GET32(IN +  4);
-	x2 = GET32(IN +  8);
+    x0 = GET32(IN);
+    x1 = GET32(IN + 4);
+    x2 = GET32(IN + 8);
     x3 = GET32(IN + 12);
 
     x0 = affineU32(wbsm4_ctx->SE[0], x0);
@@ -194,8 +195,8 @@ void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
     x3 = affineU32(wbsm4_ctx->FE[1], x3);
     x2 = affineU32(wbsm4_ctx->FE[0], x2);
 
-    PUT32(x0, OUT     );
-	PUT32(x4, OUT +  4);
-	PUT32(x3, OUT +  8);
-	PUT32(x2, OUT + 12);
+    PUT32(x0, OUT);
+    PUT32(x4, OUT + 4);
+    PUT32(x3, OUT + 8);
+    PUT32(x2, OUT + 12);
 }
