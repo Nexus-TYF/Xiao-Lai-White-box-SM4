@@ -3,6 +3,23 @@
 
 #include <stdint.h>
 
+//4bits
+typedef struct M4
+{
+    uint8_t M[4];
+}M4;
+
+typedef struct V4
+{
+    uint8_t V;
+}V4;
+
+typedef struct Aff4
+{
+    M4 Mat;
+    V4 Vec;
+}Aff4;
+
 //8bits
 typedef struct M8
 {

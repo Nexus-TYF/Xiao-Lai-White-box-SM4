@@ -10,7 +10,6 @@ int main()
     Sm4Whitebox sm4_wb_ctx;
     
     sm4_wb_gen_tables(key, &sm4_wb_ctx);
-    printstate(IN); 
     sm4_wb_enc(IN, OUT, &sm4_wb_ctx);
     printstate(OUT);
     

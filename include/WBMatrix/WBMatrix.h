@@ -1,18 +1,51 @@
 #ifndef _HWBMATRIX_H_
 #define _HWBMATRIX_H_
 /***
- * Last Update:2020/07/01
- * Version:2.2.1
+ * Last Update: 2020/08/01
+ * Version: 3.1
 ***/
 #include "WBMatrix/structure.h"
-#include "WBMatrix/inverse.h"
+#include "WBMatrix/random.h"
 #include <time.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "WBMatrix/random.h"
 
 void SetRandSeed(unsigned int seed);//Set random seed
+/*
+* 4bit Matrix operation
+*/
+void initM4(M4 *Mat);
+void randM4(M4 *Mat);
+void identityM4(M4 *Mat);
+void printM4(M4 Mat);
+void printbitM4(M4 Mat);
+void copyM4(M4 Mat1, M4 *Mat2);
+int isequalM4(M4 Mat1, M4 Mat2);
+int isinvertM4(M4 Mat);
+void invsM4(M4 Mat, M4 *Mat_inv);
+int readbitM4(M4 Mat, int i, int j);
+void flipbitM4(M4 *Mat, int i, int j);
+void setbitM4(M4 *Mat, int i, int j, int bit);
 
+void initV4(V4 *Vec);
+void randV4(V4 *Vec);
+void printV4(V4 Vec);
+int isequalV4(V4 Vec1, V4 Vec2);
+void VecAddVecV4(V4 Vec1, V4 Vec2, V4 *Vec);
+
+uint8_t affineU4(Aff4 aff, uint8_t arr);
+int xorU4(uint8_t n);
+int HWU4(uint8_t n);
+
+void MatMulVecM4(M4 Mat,V4 Vec, V4 *ans);
+uint8_t MatMulNumM4(M4 Mat, uint8_t n);
+void MatMulMatM4(M4 Mat1, M4 Mat2, M4 *Mat);
+void MatAddMatM4(M4 Mat1, M4 Mat2, M4 *Mat);
+void MattransM4(M4 Mat, M4 *Mat_trans);
+
+void genMatpairM4(M4 *Mat, M4 *Mat_inv);
+void genaffinepairM4(Aff4 *aff, Aff4 *aff_inv);
+void affinemixM4(Aff4 aff, Aff4 preaff_inv, Aff4 *mixaff);
 /*
 * 8bit Matrix operation
 */
@@ -24,6 +57,10 @@ void printbitM8(M8 Mat);
 void copyM8(M8 Mat1, M8 *Mat2);
 int isequalM8(M8 Mat1, M8 Mat2);
 int isinvertM8(M8 Mat);
+void invsM8(M8 Mat, M8 *Mat_inv);
+int readbitM8(M8 Mat, int i, int j);
+void flipbitM8(M8 *Mat, int i, int j);
+void setbitM8(M8 *Mat, int i, int j, int bit);
 
 void initV8(V8 *Vec);
 void randV8(V8 *Vec);
@@ -31,7 +68,7 @@ void printV8(V8 Vec);
 int isequalV8(V8 Vec1, V8 Vec2);
 void VecAddVecV8(V8 Vec1, V8 Vec2, V8 *Vec);
 
-uint8_t affineU8(Aff8 aff,uint8_t arr);
+uint8_t affineU8(Aff8 aff, uint8_t arr);
 int xorU8(uint8_t n);
 int HWU8(uint8_t n);
 void printU8(uint8_t n);
@@ -41,8 +78,6 @@ uint8_t MatMulNumM8(M8 Mat, uint8_t n);
 void MatMulMatM8(M8 Mat1, M8 Mat2, M8 *Mat);
 void MatAddMatM8(M8 Mat1, M8 Mat2, M8 *Mat);
 void MattransM8(M8 Mat, M8 *Mat_trans);
-void initinvbaseM8(int N);
-void freebaseM8();
 
 void genMatpairM8(M8 *Mat, M8 *Mat_inv);
 void genaffinepairM8(Aff8 *aff, Aff8 *aff_inv);
@@ -58,6 +93,10 @@ void printbitM16(M16 Mat);
 void copyM16(M16 Mat1, M16 *Mat2);
 int isequalM16(M16 Mat1, M16 Mat2);
 int isinvertM16(M16 Mat);
+void invsM16(M16 Mat, M16 *Mat_inv);
+int readbitM16(M16 Mat, int i, int j);
+void flipbitM16(M16 *Mat, int i, int j);
+void setbitM16(M16 *Mat, int i, int j, int bit);
 
 void initV16(V16 *Vec);
 void randV16(V16 *Vec);
@@ -73,10 +112,7 @@ void MatAddMatM16(M16 Mat1, M16 Mat2, M16 *Mat);
 void MatMulVecM16(M16 Mat, V16 Vec, V16 *ans);
 uint16_t MatMulNumM16(M16 Mat, uint16_t n);
 void MatMulMatM16(M16 Mat1, M16 Mat2, M16 *Mat);
-
 void MattransM16(M16 Mat, M16 *Mat_trans);
-void initinvbaseM16(int N);
-void freebaseM16();
 
 void genMatpairM16(M16 *Mat, M16 *Mat_inv);
 void genaffinepairM16(Aff16 *aff, Aff16 *aff_inv);
@@ -92,6 +128,10 @@ void printbitM32(M32 Mat);
 void copyM32(M32 Mat1, M32 *Mat2);
 int isequalM32(M32 Mat1, M32 Mat2);
 int isinvertM32(M32 Mat);
+void invsM32(M32 Mat, M32 *Mat_inv);
+int readbitM32(M32 Mat, int i, int j);
+void flipbitM32(M32 *Mat, int i, int j);
+void setbitM32(M32 *Mat, int i, int j, int bit);
 
 void initV32(V32 *Vec);
 void randV32(V32 *Vec);
@@ -109,8 +149,6 @@ uint32_t MatMulNumM32(M32 Mat, uint32_t n);
 void MatMulMatM32(M32 Mat1, M32 Mat2, M32 *Mat);
 void MatAddMatM32(M32 Mat1, M32 Mat2, M32 *Mat);
 void MattransM32(M32 Mat, M32 *Mat_trans);
-void initinvbaseM32(int N);
-void freebaseM32();
 
 void genMatpairM32(M32 *Mat, M32 *Mat_inv);
 void genaffinepairM32(Aff32 *aff, Aff32 *aff_inv);
@@ -129,6 +167,10 @@ void printbitM64(M64 Mat);
 void copyM64(M64 Mat1, M64 *Mat2);
 int isequalM64(M64 Mat1, M64 Mat2);
 int isinvertM64(M64 Mat);
+void invsM64(M64 Mat, M64 *Mat_inv);
+int readbitM64(M64 Mat, int i, int j);
+void flipbitM64(M64 *Mat, int i, int j);
+void setbitM64(M64 *Mat, int i, int j, int bit);
 
 void initV64(V64 *Vec);
 void randV64(V64 *Vec);
@@ -144,15 +186,18 @@ void printU64(uint64_t n);
 void MatMulVecM64(M64 Mat, V64 Vec, V64 *ans);
 uint64_t MatMulNumM64(M64 Mat, uint64_t n);
 void MatMulMatM64(M64 Mat1, M64 Mat2, M64 *Mat);
-
 void MattransM64(M64 Mat, M64 *Mat_trans);
-void initinvbaseM64(int N);
-void freebaseM64();
 
 void MatAddMatM64(M64 Mat1, M64 Mat2, M64 *Mat);
 void genMatpairM64(M64 *Mat, M64 *Mat_inv);
 void genaffinepairM64(Aff64 *aff, Aff64 *aff_inv);
 void affinemixM64(Aff64 aff, Aff64 preaff_inv, Aff64 *mixaff);
+void MatrixcomM16to64(M16 m1, M16 m2, M16 m3, M16 m4, M64 *mat);
+void VectorcomV16to64(V16 v1, V16 v2, V16 v3, V16 v4, V64 *vec);
+void affinecomM16to64(Aff16 aff1, Aff16 aff2, Aff16 aff3, Aff16 aff4, Aff64 *aff);
+void MatrixcomM8to64(M8 m1, M8 m2, M8 m3, M8 m4, M8 m5, M8 m6, M8 m7, M8 m8, M64 *mat);
+void VectorcomV8to64(V8 v1, V8 v2, V8 v3, V8 v4, V8 v5, V8 v6, V8 v7, V8 v8, V64 *vec);
+void affinecomM8to64(Aff8 aff1, Aff8 aff2, Aff8 aff3, Aff8 aff4, Aff8 aff5, Aff8 aff6, Aff8 aff7, Aff8 aff8, Aff64 *aff);
 /*
 * 128bit Matrix operation
 */
@@ -164,6 +209,10 @@ void printbitM128(M128 Mat);
 void copyM128(M128 Mat1, M128 *Mat2);
 int isequalM128(M128 Mat1, M128 Mat2);
 int isinvertM128(M128 Mat);
+void invsM128(M128 Mat, M128 *Mat_inv);
+int readbitM128(M128 Mat, int i, int j);
+void flipbitM128(M128 *Mat, int i, int j);
+void setbitM128(M128 *Mat, int i, int j, int bit);
 
 void initV128(V128 *Vec);
 void randV128(V128 *Vec);
@@ -179,14 +228,17 @@ void VecAddVecV128(V128 Vec1, V128 Vec2, V128 *Vec);
 void MatMulVecM128(M128 Mat, V128 Vec, V128 *ans);
 //void MatMulNumM128(M128 Mat, uint64_t n[], uint64_t ans[]);
 void MatMulMatM128(M128 Mat1, M128 Mat2, M128 *Mat);
-
 void MattransM128(M128 Mat, M128 *Mat_trans);
-void initinvbaseM128(int N);
-void freebaseM128();
 
 void MatAddMatM128(M128 Mat1, M128 Mat2, M128 *Mat);
 void genMatpairM128(M128 *Mat, M128 *Mat_inv);
 void genaffinepairM128(Aff128 *aff, Aff128 *aff_inv);
 void affinemixM128(Aff128 aff, Aff128 preaff_inv, Aff128 *mixaff);
+void MatrixcomM32to128(M32 m1, M32 m2, M32 m3, M32 m4, M128 *mat);
+void VectorcomV32to128(V32 v1, V32 v2, V32 v3, V32 v4, V128 *vec);
+void affinecomM32to128(Aff32 aff1, Aff32 aff2, Aff32 aff3, Aff32 aff4, Aff128 *aff);
+void MatrixcomM8to128(M8 m1, M8 m2, M8 m3, M8 m4, M8 m5, M8 m6, M8 m7, M8 m8, M8 m9, M8 m10, M8 m11, M8 m12, M8 m13, M8 m14, M8 m15, M8 m16, M128 *mat);
+void VectorcomV8to128(V8 v1, V8 v2, V8 v3, V8 v4, V8 v5, V8 v6, V8 v7, V8 v8, V8 v9, V8 v10, V8 v11, V8 v12, V8 v13, V8 v14, V8 v15, V8 v16, V128 *vec);
+void affinecomM8to128(Aff8 aff1, Aff8 aff2, Aff8 aff3, Aff8 aff4, Aff8 aff5, Aff8 aff6, Aff8 aff7, Aff8 aff8, Aff8 aff9, Aff8 aff10, Aff8 aff11, Aff8 aff12, Aff8 aff13, Aff8 aff14, Aff8 aff15, Aff8 aff16, Aff128 *aff);
 
 #endif
