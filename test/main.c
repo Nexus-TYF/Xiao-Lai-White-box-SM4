@@ -7,10 +7,9 @@ int main()
     unsigned char OUT[16];
     unsigned char OOUT[16];
 
-    Sm4Whitebox sm4_wb_ctx;
-    
-    sm4_wb_gen_tables(key, &sm4_wb_ctx);
-    sm4_wb_enc(IN, OUT, &sm4_wb_ctx);
+    wbsm4 wbsm4_ctx;
+    wbsm4_gen(&wbsm4_ctx, key);
+    wbsm4_encrypt(IN, OUT, &wbsm4_ctx);
     printstate(OUT);
     
     sm4_context ctx;

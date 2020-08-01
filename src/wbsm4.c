@@ -58,35 +58,37 @@ void printstate(unsigned char * in)
     }
     printf("\n");
 }
-void sm4_wb_gen_secrect_sbox(sm4_context *sm4_key) {
-    uint8_t *sst;
-    uint32_t key[32];
-    for(int i=0;i<32;i++)
-    {
-        key[i] = sm4_key->sk[i];
-    }
-    uint32_t *rk = key;
+
+void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
+{
+    Aff32 P[SM4_ROUNDS + 4][2];
+    Aff8 E[SM4_ROUNDS + 4][4][2];
+    Aff32 EC[SM4_ROUNDS + 4][2];
+    Aff32 Q[SM4_ROUNDS + 4][2];
+
+    uint8_t skbox_enc[SM4_ROUNDS][4][256];
+
+    int i, j;
+    sm4_context ctx;
+    sm4_setkey_enc(&ctx, key);
+   
     for (int i = 0; i < 32; i++) 
     {
         for (int j = 0; j < 256; j++) 
         {
-            skbox_enc[i][0][j] = SBOX[ j ^ ((rk[i] >> 24) & 0xff) ];
-            skbox_enc[i][1][j] = SBOX[ j ^ ((rk[i] >> 16) & 0xff) ];
-            skbox_enc[i][2][j] = SBOX[ j ^ ((rk[i] >>  8) & 0xff) ];
-            skbox_enc[i][3][j] = SBOX[ j ^ ((rk[i]      ) & 0xff) ];
+            skbox_enc[i][0][j] = SBOX[ j ^ ((ctx.sk[i] >> 24) & 0xff) ];
+            skbox_enc[i][1][j] = SBOX[ j ^ ((ctx.sk[i] >> 16) & 0xff) ];
+            skbox_enc[i][2][j] = SBOX[ j ^ ((ctx.sk[i] >>  8) & 0xff) ];
+            skbox_enc[i][3][j] = SBOX[ j ^ ((ctx.sk[i]      ) & 0xff) ];
         }
     }
-}
-void sm4_wb_gen_affine(Sm4Whitebox* sm4_wb_ctx)
-{
-    int i,j;
-    int rounds = 32 + 4;
-    for (i = 0; i < rounds; i++) 
+
+    for (i = 0; i < 32 + 4; i++) 
     {
-        //gen P affine matrix
+        //affine P
           genaffinepairM32(&P[i][0], &P[i][1]);
 
-        //gen E affine matrix
+        //affine E
         for (j = 0; j < 4; j++) 
         {
             genaffinepairM8(&E[i][j][0], &E[i][j][1]);
@@ -96,23 +98,19 @@ void sm4_wb_gen_affine(Sm4Whitebox* sm4_wb_ctx)
         affinecomM8to32(E[i][0][1], E[i][1][1], E[i][2][1], E[i][3][1], &EC[i][1]);
         genaffinepairM32(&Q[i][0], &Q[i][1]);
     }
-}
-void sm4_wb_combine_tables(Sm4Whitebox* sm4_wb_ctx)
-{
-    int i, j;
-    int rounds = 32;
-    for (i = 0; i < rounds; i++)
-    {
-        //part 1. gen M affine matrix
-        affinemixM32(EC[i][1], P[i+1][1], &sm4_wb_ctx->M[i][0]);
-        affinemixM32(EC[i][1], P[i+2][1], &sm4_wb_ctx->M[i][1]);
-        affinemixM32(EC[i][1], P[i+3][1], &sm4_wb_ctx->M[i][2]);
 
-        //part 2. gen Q combine L into 4 matrix
+    for (i = 0; i < 32; i++)
+    {
+        //affine M
+        affinemixM32(EC[i][1], P[i + 1][1], &wbsm4_ctx->M[i][0]);
+        affinemixM32(EC[i][1], P[i + 2][1], &wbsm4_ctx->M[i][1]);
+        affinemixM32(EC[i][1], P[i + 3][1], &wbsm4_ctx->M[i][2]);
+
+        //combine QL
         M32 QL;
         MatMulMatM32(Q[i][0].Mat, sm4_csl_xor_matrix, &QL);
         M32 QLi[4];
-        for(j = 0; j<4; j++)
+        for(j = 0; j < 4; j++)
         {
             for (int ii = 0; ii < 32; ii++) 
             {
@@ -129,40 +127,33 @@ void sm4_wb_combine_tables(Sm4Whitebox* sm4_wb_ctx)
                 int kd =  affineU8(E[i][d][0], k);
                 kd = skbox_enc[i][d][kd];
                 uint32_t temp = 0;
-                for(int ii = 0; ii < 32; ii++){
-                    if(xorU8((uint8_t)(QLi[3-d].M[ii]) & kd)) temp ^= identM32[ii];
+                for(int ii = 0; ii < 32; ii++)
+                {
+                    if(xorU8((uint8_t)(QLi[3 - d].M[ii]) & kd)) temp ^= identM32[ii];
                 }
-                sm4_wb_ctx->Table[i][d][k] = temp;
+                wbsm4_ctx->Table[i][d][k] = temp;
             }
-            sm4_wb_ctx->Table[i][3][k] = sm4_wb_ctx->Table[i][3][k] ^ r;
+            wbsm4_ctx->Table[i][3][k] = wbsm4_ctx->Table[i][3][k] ^ r;
         }
         
-        //part 3. gen C D matrix, C for Xi0, D for T(Xi1+Xi2+Xi3+rk)
-        affinemixM32(P[i+4][0], P[i][1], &sm4_wb_ctx->C[i]);
-        affinemixM32(P[i+4][0], Q[i][1], &sm4_wb_ctx->D[i]);
-        sm4_wb_ctx->D[i].Vec.V ^= P[i+4]->Vec.V ;
+        //affine C D, C for Xi0, D for T(Xi1+Xi2+Xi3+rk)
+        affinemixM32(P[i + 4][0], P[i][1], &wbsm4_ctx->C[i]);
+        affinemixM32(P[i + 4][0], Q[i][1], &wbsm4_ctx->D[i]);
+        wbsm4_ctx->D[i].Vec.V ^= P[i + 4]->Vec.V ;
     }
 
     //external encoding
-    for (int i=0; i<4; i++) 
+    for (i = 0; i < 4; i++) 
     {
-        sm4_wb_ctx->SE[i].Mat = P[i][0].Mat;
-        sm4_wb_ctx->SE[i].Vec = P[i][0].Vec;
+        wbsm4_ctx->SE[i].Mat = P[i][0].Mat;
+        wbsm4_ctx->SE[i].Vec = P[i][0].Vec;
 
-        sm4_wb_ctx->FE[i].Mat = P[rounds + i][1].Mat;
-        sm4_wb_ctx->FE[i].Vec = P[rounds + i][1].Vec;
+        wbsm4_ctx->FE[i].Mat = P[32 + i][1].Mat;
+        wbsm4_ctx->FE[i].Vec = P[32 + i][1].Vec;
     }
+}
 
-}
-void sm4_wb_gen_tables(uint8_t *key, Sm4Whitebox *sm4_wb_ctx)
-{
-    sm4_context ctx;
-    sm4_setkey_enc(&ctx, key);
-    sm4_wb_gen_secrect_sbox(&ctx);
-    sm4_wb_gen_affine(sm4_wb_ctx);
-    sm4_wb_combine_tables(sm4_wb_ctx);
-}
-void sm4_wb_enc(unsigned char IN[], unsigned char OUT[], Sm4Whitebox *sm4_wb_ctx)
+void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
 {
     uint32_t x0,x1,x2,x3,x4;
     uint32_t xt0, xt1, xt2, xt3, xt4;
@@ -172,20 +163,20 @@ void sm4_wb_enc(unsigned char IN[], unsigned char OUT[], Sm4Whitebox *sm4_wb_ctx
 	x2 = GET32(IN +  8);
     x3 = GET32(IN + 12);
 
-    x0 = affineU32(sm4_wb_ctx->SE[0], x0);
-    x1 = affineU32(sm4_wb_ctx->SE[1], x1);
-    x2 = affineU32(sm4_wb_ctx->SE[2], x2);
-    x3 = affineU32(sm4_wb_ctx->SE[3], x3);
+    x0 = affineU32(wbsm4_ctx->SE[0], x0);
+    x1 = affineU32(wbsm4_ctx->SE[1], x1);
+    x2 = affineU32(wbsm4_ctx->SE[2], x2);
+    x3 = affineU32(wbsm4_ctx->SE[3], x3);
 
     for(int i = 0; i < 32; i++)
     {
-        xt1 = affineU32(sm4_wb_ctx->M[i][0], x1);
-        xt2 = affineU32(sm4_wb_ctx->M[i][1], x2);
-        xt3 = affineU32(sm4_wb_ctx->M[i][2], x3);
+        xt1 = affineU32(wbsm4_ctx->M[i][0], x1);
+        xt2 = affineU32(wbsm4_ctx->M[i][1], x2);
+        xt3 = affineU32(wbsm4_ctx->M[i][2], x3);
         x4 = xt1 ^ xt2 ^ xt3;
-        x4 = sm4_wb_ctx->Table[i][0][(x4 >> 24) & 0xff] ^ sm4_wb_ctx->Table[i][1][(x4 >> 16) & 0xff] ^ sm4_wb_ctx->Table[i][2][(x4 >> 8) & 0xff] ^ sm4_wb_ctx->Table[i][3][x4 & 0xff];
-        xt0 = affineU32(sm4_wb_ctx->C[i], x0);
-        xt4 = affineU32(sm4_wb_ctx->D[i], x4);
+        x4 = wbsm4_ctx->Table[i][0][(x4 >> 24) & 0xff] ^ wbsm4_ctx->Table[i][1][(x4 >> 16) & 0xff] ^ wbsm4_ctx->Table[i][2][(x4 >> 8) & 0xff] ^ wbsm4_ctx->Table[i][3][x4 & 0xff];
+        xt0 = affineU32(wbsm4_ctx->C[i], x0);
+        xt4 = affineU32(wbsm4_ctx->D[i], x4);
         x4 = xt0 ^ xt4;
         
         x0=x1;
@@ -198,10 +189,10 @@ void sm4_wb_enc(unsigned char IN[], unsigned char OUT[], Sm4Whitebox *sm4_wb_ctx
     x0 = x3;
     x3 = x1;
 
-    x0 = affineU32(sm4_wb_ctx->FE[3], x0);
-    x4 = affineU32(sm4_wb_ctx->FE[2], x4);
-    x3 = affineU32(sm4_wb_ctx->FE[1], x3);
-    x2 = affineU32(sm4_wb_ctx->FE[0], x2);
+    x0 = affineU32(wbsm4_ctx->FE[3], x0);
+    x4 = affineU32(wbsm4_ctx->FE[2], x4);
+    x3 = affineU32(wbsm4_ctx->FE[1], x3);
+    x2 = affineU32(wbsm4_ctx->FE[0], x2);
 
     PUT32(x0, OUT     );
 	PUT32(x4, OUT +  4);
