@@ -13,9 +13,7 @@
 (ct)[2] = (uint8_t)((st) >>  8);\
 (ct)[3] = (uint8_t)(st)
 
-uint32_t identM32[32]={0x80000000,0x40000000,0x20000000,0x10000000,0x8000000,0x4000000,0x2000000,0x1000000,0x800000,0x400000,0x200000,0x100000,0x80000,0x40000,0x20000,0x10000,0x8000,0x4000,0x2000,0x1000,0x800,0x400,0x200,0x100,0x80,0x40,0x20,0x10,0x8,0x4,0x2,0x1};
-
-M32 sm4_csl_xor_matrix = {
+M32 L_matrix = {
     .M[0] = 0xA0202080, 
     .M[1] = 0x50101040, 
     .M[2] = 0x28080820, 
@@ -61,96 +59,88 @@ void printstate(unsigned char * in)
 
 void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
 {
-    Aff32 P[SM4_ROUNDS + 4][2];
-    Aff8 E[SM4_ROUNDS + 4][4][2];
-    Aff32 EC[SM4_ROUNDS + 4][2];
-    Aff32 Q[SM4_ROUNDS][2];
-    uint8_t skbox_enc[SM4_ROUNDS][4][256];
+    Aff32 P[SM4_ROUNDS + 4];
+    Aff32 P_inv[SM4_ROUNDS + 4];
+    Aff8 Eij[SM4_ROUNDS][4];
+    Aff8 Eij_inv[SM4_ROUNDS][4];
+    Aff32 Ei_inv[SM4_ROUNDS];
+    Aff32 Q[SM4_ROUNDS];
+    Aff32 Q_inv[SM4_ROUNDS];
 
-    int i, j;
     sm4_context ctx;
     sm4_setkey_enc(&ctx, key);
-   
-    for (int i = 0; i < 32; i++) 
-    {
-        for (int j = 0; j < 256; j++) 
-        {
-            skbox_enc[i][0][j] = SBOX[ j ^ ((ctx.sk[i] >> 24) & 0xff) ];
-            skbox_enc[i][1][j] = SBOX[ j ^ ((ctx.sk[i] >> 16) & 0xff) ];
-            skbox_enc[i][2][j] = SBOX[ j ^ ((ctx.sk[i] >>  8) & 0xff) ];
-            skbox_enc[i][3][j] = SBOX[ j ^ ((ctx.sk[i]      ) & 0xff) ];
-        }
-    }
+    InitRandom(((unsigned int)time(NULL)));
 
-    for (i = 0; i < 32 + 4; i++) 
+    for (int i = 0; i < 32 + 4; i++) 
     {
         //affine P
-          genaffinepairM32(&P[i][0], &P[i][1]);
+          genaffinepairM32(&P[i], &P_inv[i]);
+    }
 
+    for (int i = 0; i < 32; i++) 
+    {
         //affine E
-        for (j = 0; j < 4; j++) 
+        for (int j = 0; j < 4; j++) 
         {
-            genaffinepairM8(&E[i][j][0], &E[i][j][1]);
+            genaffinepairM8(&Eij[i][j], &Eij_inv[i][j]);
         }
 
         // combine 4 E8 to 1 E32
-        affinecomM8to32(E[i][0][1], E[i][1][1], E[i][2][1], E[i][3][1], &EC[i][1]);
-    }
+        affinecomM8to32(Eij_inv[i][0], Eij_inv[i][1], Eij_inv[i][2], Eij_inv[i][3], &Ei_inv[i]);
 
-    for (i = 0; i < 32; i++)
-    {
         //affine M
-        affinemixM32(EC[i][1], P[i + 1][1], &wbsm4_ctx->M[i][0]);
-        affinemixM32(EC[i][1], P[i + 2][1], &wbsm4_ctx->M[i][1]);
-        affinemixM32(EC[i][1], P[i + 3][1], &wbsm4_ctx->M[i][2]);
+        affinemixM32(Ei_inv[i], P_inv[i + 1], &wbsm4_ctx->M[i][0]);
+        affinemixM32(Ei_inv[i], P_inv[i + 2], &wbsm4_ctx->M[i][1]);
+        affinemixM32(Ei_inv[i], P_inv[i + 3], &wbsm4_ctx->M[i][2]);
 
         //affine Q
-        genaffinepairM32(&Q[i][0], &Q[i][1]);
-        
+        genaffinepairM32(&Q[i], &Q_inv[i]);
+
+        //affine C D, C for Xi0, D for T(Xi1+Xi2+Xi3+rk)
+        affinemixM32(P[i + 4], P_inv[i], &wbsm4_ctx->C[i]);
+        affinemixM32(P[i + 4], Q_inv[i], &wbsm4_ctx->D[i]);
+        uint32_t temp_u32 = cus_random();
+        wbsm4_ctx->C[i].Vec.V ^= temp_u32;
+        wbsm4_ctx->D[i].Vec.V ^= P[i + 4].Vec.V ^ temp_u32;
+    }
+
+    for (int i = 0; i < 32; i++)
+    {
         //combine QL
         M32 QL;
-        MatMulMatM32(Q[i][0].Mat, sm4_csl_xor_matrix, &QL);
-        M32 QLi[4];
-        for(j = 0; j < 4; j++)
+        MatMulMatM32(Q[i].Mat, L_matrix, &QL);
+
+        uint32_t Q_constant[3] = {0};
+        for(int j = 0; j < 3; j++)
         {
-            for (int ii = 0; ii < 32; ii++) 
-            {
-                QLi[j].M[ii] = (uint8_t)(QL.M[ii] >> (8 * j));
-            }
+            Q_constant[j] = cus_random();
         }
 
-        int k;
-        uint32_t r = Q[i][0].Vec.V;
-        for (k = 0; k < 256; k++) 
+        for (int x = 0; x < 256; x++) 
         {
-            for (int d = 0; d < 4; d++) 
+            for (int j = 0; j < 4; j++) 
             {
-                int kd =  affineU8(E[i][d][0], k);
-                kd = skbox_enc[i][d][kd];
-                uint32_t temp = 0;
-                for(int ii = 0; ii < 32; ii++)
-                {
-                    if(xorU8((uint8_t)(QLi[3 - d].M[ii]) & kd)) temp ^= identM32[ii];
-                }
-                wbsm4_ctx->Table[i][d][k] = temp;
+                uint8_t temp_u8 =  affineU8(Eij[i][j], x);
+                temp_u8 = SBOX[temp_u8 ^ ((ctx.sk[i] >> (24 - j * 8)) & 0xff)];
+                uint32_t temp_32 = temp_u8 << ((24 - j * 8));
+                wbsm4_ctx->Table[i][j][x] = MatMulNumM32(QL, temp_32);
             }
-            wbsm4_ctx->Table[i][3][k] = wbsm4_ctx->Table[i][3][k] ^ r;
+            for(int j = 0; j < 3; j++)
+            {
+                wbsm4_ctx->Table[i][j][x] ^= Q_constant[j];
+            }
+            wbsm4_ctx->Table[i][3][x] ^=  Q[i].Vec.V ^ Q_constant[0] ^ Q_constant[1] ^ Q_constant[2];
         }
-        
-        //affine C D, C for Xi0, D for T(Xi1+Xi2+Xi3+rk)
-        affinemixM32(P[i + 4][0], P[i][1], &wbsm4_ctx->C[i]);
-        affinemixM32(P[i + 4][0], Q[i][1], &wbsm4_ctx->D[i]);
-        wbsm4_ctx->D[i].Vec.V ^= P[i + 4]->Vec.V ;
     }
 
     //external encoding
-    for (i = 0; i < 4; i++) 
+    for (int i = 0; i < 4; i++) 
     {
-        wbsm4_ctx->SE[i].Mat = P[i][0].Mat;
-        wbsm4_ctx->SE[i].Vec = P[i][0].Vec;
+        wbsm4_ctx->SE[i].Mat = P[i].Mat;
+        wbsm4_ctx->SE[i].Vec = P[i].Vec;
 
-        wbsm4_ctx->FE[i].Mat = P[32 + i][1].Mat;
-        wbsm4_ctx->FE[i].Vec = P[32 + i][1].Vec;
+        wbsm4_ctx->FE[i].Mat = P_inv[32 + i].Mat;
+        wbsm4_ctx->FE[i].Vec = P_inv[32 + i].Vec;
     }
 }
 
