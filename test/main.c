@@ -7,9 +7,8 @@ int main()
     unsigned char OUT[16];
     unsigned char OOUT[16];
 
-    wbsm4 wbsm4_ctx;
-    wbsm4_gen(&wbsm4_ctx, key);
-    wbsm4_encrypt(IN, OUT, &wbsm4_ctx);
+    wbsm4_gen(key);
+    wbsm4_encrypt(IN, OUT);
     printstate(OUT);
     
     sm4_context ctx;

@@ -57,7 +57,7 @@ void printstate(unsigned char * in)
     printf("\n");
 }
 
-void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
+void wbsm4_gen(uint8_t *key)
 {
     Aff32 P[SM4_ROUNDS + 4];
     Aff32 P_inv[SM4_ROUNDS + 4];
@@ -89,19 +89,19 @@ void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
         affinecomM8to32(Eij_inv[i][0], Eij_inv[i][1], Eij_inv[i][2], Eij_inv[i][3], &Ei_inv[i]);
 
         //affine M
-        affinemixM32(Ei_inv[i], P_inv[i + 1], &wbsm4_ctx->M[i][0]);
-        affinemixM32(Ei_inv[i], P_inv[i + 2], &wbsm4_ctx->M[i][1]);
-        affinemixM32(Ei_inv[i], P_inv[i + 3], &wbsm4_ctx->M[i][2]);
+        affinemixM32(Ei_inv[i], P_inv[i + 1], &M[i][0]);
+        affinemixM32(Ei_inv[i], P_inv[i + 2], &M[i][1]);
+        affinemixM32(Ei_inv[i], P_inv[i + 3], &M[i][2]);
 
         //affine Q
         genaffinepairM32(&Q[i], &Q_inv[i]);
 
         //affine C D, C for Xi0, D for T(Xi1+Xi2+Xi3+rk)
-        affinemixM32(P[i + 4], P_inv[i], &wbsm4_ctx->C[i]);
-        affinemixM32(P[i + 4], Q_inv[i], &wbsm4_ctx->D[i]);
+        affinemixM32(P[i + 4], P_inv[i], &C[i]);
+        affinemixM32(P[i + 4], Q_inv[i], &D[i]);
         uint32_t temp_u32 = cus_random();
-        wbsm4_ctx->C[i].Vec.V ^= temp_u32;
-        wbsm4_ctx->D[i].Vec.V ^= P[i + 4].Vec.V ^ temp_u32;
+        C[i].Vec.V ^= temp_u32;
+        D[i].Vec.V ^= P[i + 4].Vec.V ^ temp_u32;
     }
 
     for (int i = 0; i < 32; i++)
@@ -123,28 +123,28 @@ void wbsm4_gen(wbsm4* wbsm4_ctx, uint8_t *key)
                 uint8_t temp_u8 =  affineU8(Eij[i][j], x);
                 temp_u8 = SBOX[temp_u8 ^ ((ctx.sk[i] >> (24 - j * 8)) & 0xff)];
                 uint32_t temp_32 = temp_u8 << ((24 - j * 8));
-                wbsm4_ctx->Table[i][j][x] = MatMulNumM32(QL, temp_32);
+                Table[i][j][x] = MatMulNumM32(QL, temp_32);
             }
             for(int j = 0; j < 3; j++)
             {
-                wbsm4_ctx->Table[i][j][x] ^= Q_constant[j];
+                Table[i][j][x] ^= Q_constant[j];
             }
-            wbsm4_ctx->Table[i][3][x] ^=  Q[i].Vec.V ^ Q_constant[0] ^ Q_constant[1] ^ Q_constant[2];
+            Table[i][3][x] ^=  Q[i].Vec.V ^ Q_constant[0] ^ Q_constant[1] ^ Q_constant[2];
         }
     }
 
     //external encoding
     for (int i = 0; i < 4; i++) 
     {
-        wbsm4_ctx->SE[i].Mat = P[i].Mat;
-        wbsm4_ctx->SE[i].Vec = P[i].Vec;
+        SE[i].Mat = P[i].Mat;
+        SE[i].Vec = P[i].Vec;
 
-        wbsm4_ctx->FE[i].Mat = P_inv[32 + i].Mat;
-        wbsm4_ctx->FE[i].Vec = P_inv[32 + i].Vec;
+        FE[i].Mat = P_inv[32 + i].Mat;
+        FE[i].Vec = P_inv[32 + i].Vec;
     }
 }
 
-void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
+void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[])
 {
     uint32_t x0,x1,x2,x3,x4;
     uint32_t xt0, xt1, xt2, xt3, xt4;
@@ -154,20 +154,20 @@ void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
     x2 = GET32(IN + 8);
     x3 = GET32(IN + 12);
 
-    x0 = affineU32(wbsm4_ctx->SE[0], x0);
-    x1 = affineU32(wbsm4_ctx->SE[1], x1);
-    x2 = affineU32(wbsm4_ctx->SE[2], x2);
-    x3 = affineU32(wbsm4_ctx->SE[3], x3);
+    x0 = affineU32(SE[0], x0);
+    x1 = affineU32(SE[1], x1);
+    x2 = affineU32(SE[2], x2);
+    x3 = affineU32(SE[3], x3);
 
     for(int i = 0; i < 32; i++)
     {
-        xt1 = affineU32(wbsm4_ctx->M[i][0], x1);
-        xt2 = affineU32(wbsm4_ctx->M[i][1], x2);
-        xt3 = affineU32(wbsm4_ctx->M[i][2], x3);
+        xt1 = affineU32(M[i][0], x1);
+        xt2 = affineU32(M[i][1], x2);
+        xt3 = affineU32(M[i][2], x3);
         x4 = xt1 ^ xt2 ^ xt3;
-        x4 = wbsm4_ctx->Table[i][0][(x4 >> 24) & 0xff] ^ wbsm4_ctx->Table[i][1][(x4 >> 16) & 0xff] ^ wbsm4_ctx->Table[i][2][(x4 >> 8) & 0xff] ^ wbsm4_ctx->Table[i][3][x4 & 0xff];
-        xt0 = affineU32(wbsm4_ctx->C[i], x0);
-        xt4 = affineU32(wbsm4_ctx->D[i], x4);
+        x4 = Table[i][0][(x4 >> 24) & 0xff] ^ Table[i][1][(x4 >> 16) & 0xff] ^ Table[i][2][(x4 >> 8) & 0xff] ^ Table[i][3][x4 & 0xff];
+        xt0 = affineU32(C[i], x0);
+        xt4 = affineU32(D[i], x4);
         x4 = xt0 ^ xt4;
         
         x0=x1;
@@ -180,10 +180,10 @@ void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[], wbsm4 *wbsm4_ctx)
     x0 = x3;
     x3 = x1;
 
-    x0 = affineU32(wbsm4_ctx->FE[3], x0);
-    x4 = affineU32(wbsm4_ctx->FE[2], x4);
-    x3 = affineU32(wbsm4_ctx->FE[1], x3);
-    x2 = affineU32(wbsm4_ctx->FE[0], x2);
+    x0 = affineU32(FE[3], x0);
+    x4 = affineU32(FE[2], x4);
+    x3 = affineU32(FE[1], x3);
+    x2 = affineU32(FE[0], x2);
 
     PUT32(x0, OUT);
     PUT32(x4, OUT + 4);
