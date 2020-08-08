@@ -1,18 +1,6 @@
 #include "wbsm4.h"
 #include "sbox.h"
 
-#define GET32(pc)  (\
-((uint32_t)(pc)[0] << 24) ^\
-((uint32_t)(pc)[1] << 16) ^\
-((uint32_t)(pc)[2] <<  8) ^\
-((uint32_t)(pc)[3]))
-
-#define PUT32(st, ct)\
-(ct)[0] = (uint8_t)((st) >> 24);\
-(ct)[1] = (uint8_t)((st) >> 16);\
-(ct)[2] = (uint8_t)((st) >>  8);\
-(ct)[3] = (uint8_t)(st)
-
 M32 L_matrix = {
     .M[0] = 0xA0202080, 
     .M[1] = 0x50101040, 
@@ -59,19 +47,19 @@ void printstate(unsigned char * in)
 
 void wbsm4_gen(uint8_t *key)
 {
-    Aff32 P[SM4_ROUNDS + 4];
-    Aff32 P_inv[SM4_ROUNDS + 4];
-    Aff8 Eij[SM4_ROUNDS][4];
-    Aff8 Eij_inv[SM4_ROUNDS][4];
-    Aff32 Ei_inv[SM4_ROUNDS];
-    Aff32 Q[SM4_ROUNDS];
-    Aff32 Q_inv[SM4_ROUNDS];
+    Aff32 P[36];
+    Aff32 P_inv[36];
+    Aff8 Eij[32][4];
+    Aff8 Eij_inv[32][4];
+    Aff32 Ei_inv[32];
+    Aff32 Q[32];
+    Aff32 Q_inv[32];
 
     sm4_context ctx;
     sm4_setkey_enc(&ctx, key);
     InitRandom(((unsigned int)time(NULL)));
 
-    for (int i = 0; i < 32 + 4; i++) 
+    for (int i = 0; i < 36; i++) 
     {
         //affine P
           genaffinepairM32(&P[i], &P_inv[i]);
@@ -139,25 +127,20 @@ void wbsm4_gen(uint8_t *key)
         SE[i].Mat = P[i].Mat;
         SE[i].Vec = P[i].Vec;
 
-        FE[i].Mat = P_inv[32 + i].Mat;
-        FE[i].Vec = P_inv[32 + i].Vec;
+        FE[i].Mat = P_inv[35 - i].Mat;
+        FE[i].Vec = P_inv[35 - i].Vec;
     }
 }
 
 void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[])
 {
-    uint32_t x0,x1,x2,x3,x4;
+    uint32_t x0, x1, x2, x3, x4;
     uint32_t xt0, xt1, xt2, xt3, xt4;
     
     x0 = GET32(IN);
     x1 = GET32(IN + 4);
     x2 = GET32(IN + 8);
     x3 = GET32(IN + 12);
-
-    x0 = affineU32(SE[0], x0);
-    x1 = affineU32(SE[1], x1);
-    x2 = affineU32(SE[2], x2);
-    x3 = affineU32(SE[3], x3);
 
     for(int i = 0; i < 32; i++)
     {
@@ -170,23 +153,14 @@ void wbsm4_encrypt(unsigned char IN[], unsigned char OUT[])
         xt4 = affineU32(D[i], x4);
         x4 = xt0 ^ xt4;
         
-        x0=x1;
-        x1=x2;
-        x2=x3;
-        x3=x4;
+        x0 = x1;
+        x1 = x2;
+        x2 = x3;
+        x3 = x4;
     }
-    x4 = x2;
-    x2 = x0;
-    x0 = x3;
-    x3 = x1;
 
-    x0 = affineU32(FE[3], x0);
-    x4 = affineU32(FE[2], x4);
-    x3 = affineU32(FE[1], x3);
-    x2 = affineU32(FE[0], x2);
-
-    PUT32(x0, OUT);
-    PUT32(x4, OUT + 4);
-    PUT32(x3, OUT + 8);
-    PUT32(x2, OUT + 12);
+    PUT32(x3, OUT);
+    PUT32(x2, OUT + 4);
+    PUT32(x1, OUT + 8);
+    PUT32(x0, OUT + 12);
 }
