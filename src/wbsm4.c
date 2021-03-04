@@ -64,7 +64,7 @@ void wbsm4_gen(uint8_t *key)
     for (i = 0; i < 36; i++) 
     {
         //affine P
-          genaffinepairM32(&P[i], &P_inv[i]);
+        genaffinepairM32(&P[i], &P_inv[i]);
     }
 
     for (i = 0; i < 32; i++) 
@@ -110,9 +110,9 @@ void wbsm4_gen(uint8_t *key)
         {
             for (j = 0; j < 4; j++) 
             {
-                uint8_t temp_u8 =  affineU8(Eij[i][j], x);
+                uint8_t temp_u8 = affineU8(Eij[i][j], x);
                 temp_u8 = SBOX[temp_u8 ^ ((ctx.sk[i] >> (24 - j * 8)) & 0xff)];
-                uint32_t temp_32 = temp_u8 << ((24 - j * 8));
+                uint32_t temp_32 = temp_u8 << (24 - j * 8);
                 Table[i][j][x] = MatMulNumM32(QL, temp_32);
             }
             for(j = 0; j < 3; j++)
